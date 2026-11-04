@@ -1,0 +1,13 @@
+{
+  "name": "the-latent-space",
+  "version": "1.0.0",
+  "description": "A pixel house of AI desktop pets",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^45.2.3"
+  }
+}
