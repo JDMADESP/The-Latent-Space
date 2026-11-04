@@ -1,13 +1,21 @@
 {
   "name": "the-latent-space",
   "version": "1.0.0",
-  "description": "A pixel house of AI desktop pets",
+  "description": "A pixel-art nightclub of AI desktop pets for macOS. Click a pet to open its app — then watch the others beat it up.",
   "main": "main.js",
-  "private": true,
   "scripts": {
     "start": "electron ."
   },
   "devDependencies": {
     "electron": "^45.2.3"
-  }
+  },
+  "license": "MIT",
+  "keywords": [
+    "desktop-pet",
+    "electron",
+    "pixel-art",
+    "macos",
+    "ai"
+  ],
+  "private": true
 }

@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Customize — The Latent Space</title>
+  <style>
+    :root {
+      --bg: #0d0a18; --panel: #17112a; --panel2: #1f1838; --line: #2e2550;
+      --text: #efe9ff; --muted: #9a8fc0; --pink: #ff3fd0; --cyan: #4ff6ff; --ok: #5dff9b; --warn: #ffb03f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 28px 32px 40px; background: var(--bg); color: var(--text);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    }
+    header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+    header h1 { margin: 0; font-size: 22px; letter-spacing: .02em; }
+    header h1 span { color: var(--pink); text-shadow: 0 0 12px rgba(255,63,208,.6); }
+    header p { margin: 2px 0 0; color: var(--muted); }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--cyan); margin: 0 0 12px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; }
+    .row { display: flex; align-items: center; gap: 14px; }
+    input[type=range] { flex: 1; accent-color: var(--pink); }
+    #scaleLabel { min-width: 90px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .pets { display: grid; gap: 12px; }
+    .pet { display: grid; grid-template-columns: 88px 1fr auto; gap: 16px; align-items: center;
+           background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .look { width: 88px; height: 124px; border-radius: 8px; border: 1px solid var(--line); background: #0a0714;
+            cursor: pointer; padding: 0; display: grid; place-items: center; position: relative; }
+    .look:hover { border-color: var(--pink); box-shadow: 0 0 0 2px rgba(255,63,208,.25); }
+    .look canvas { image-rendering: pixelated; width: 72px; height: 96px; margin-bottom: 14px; }
+    .look small { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--muted); }
+    .fields { display: grid; gap: 8px; min-width: 0; }
+    label { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+    input[type=text] { width: 100%; background: #0a0714; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+                       padding: 7px 9px; font: inherit; }
+    input[type=text]:focus { outline: none; border-color: var(--cyan); }
+    .status { font-size: 12px; margin-left: 74px; }
+    .status.ok { color: var(--ok); } .status.warn { color: var(--warn); }
+    .actions { display: flex; flex-direction: column; gap: 6px; }
+    button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px;
+             font: inherit; cursor: pointer; }
+    button:hover:not(:disabled) { border-color: var(--cyan); }
+    button:disabled { opacity: .35; cursor: default; }
+    button.primary { background: var(--pink); border-color: var(--pink); color: #1a0617; font-weight: 600; }
+    button.icon { width: 32px; height: 28px; padding: 0; }
+    .footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
+    .hint { color: var(--muted); font-size: 12px; }
+    dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
+             width: min(760px, 92vw); }
+    dialog::backdrop { background: rgba(5,3,10,.7); }
+    dialog h3 { margin: 0 0 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; max-height: 60vh; overflow: auto; padding: 2px; }
+    .tile { background: #0a0714; border: 1px solid var(--line); border-radius: 8px; padding: 8px 4px 6px; cursor: pointer;
+            display: grid; justify-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
+    .tile canvas { image-rendering: pixelated; width: 60px; height: 80px; }
+    .tile:hover { border-color: var(--cyan); color: var(--text); }
+    .tile.sel { border-color: var(--pink); color: var(--text); box-shadow: 0 0 0 2px rgba(255,63,208,.3); }
+    .house-row { display: flex; gap: 20px; align-items: center; }
+    .house-row p { margin: 4px 0 10px; }
+    .house-name { font-size: 18px; font-weight: 600; }
+    .house-look { width: 220px; height: 146px; padding: 0; border-radius: 10px; background: #0a0714; border: 1px solid var(--line);
+                  cursor: pointer; display: grid; place-items: center; }
+    .house-look:hover { border-color: var(--pink); box-shadow: 0 0 0 2px rgba(255,63,208,.25); }
+    .house-look canvas { image-rendering: pixelated; width: 204px; height: 135px; }
+    .grid.houses { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .grid.houses .tile canvas { width: 136px; height: 90px; }
+    .dialog-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>The <span>Latent</span> Space</h1>
+      <p>Pick your crew, give each one a look, and choose what it opens. Changes apply instantly.</p>
+    </div>
+  </header>
+
+  <section>
+    <h2>House</h2>
+    <div class="house-row">
+      <button class="house-look" id="houseLook" title="Change house"></button>
+      <div>
+        <div class="house-name" id="houseName"></div>
+        <p class="hint">Where your crew lives. Click the picture to pick from 25 buildings.</p>
+        <button id="changeHouse">Change house</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Size</h2>
+    <div class="row">
+      <span class="hint">Small</span>
+      <input type="range" id="scale" min="1.5" max="8" step="0.1">
+      <span class="hint">Big</span>
+      <span id="scaleLabel"></span>
+    </div>
+    <p class="hint" id="fitNote" style="margin:8px 0 0"></p>
+  </section>
+
+  <section>
+    <h2>Pets</h2>
+    <div class="pets" id="pets"></div>
+    <div class="footer">
+      <button class="primary" id="add">+ Add pet</button>
+      <span class="hint">Opens: an app name (e.g. <b>Claude</b>) or a URL (e.g. <b>https://claude.ai</b>).</span>
+    </div>
+  </section>
+
+  <div class="footer">
+    <span class="hint">Tip: drag the club to move it. Right-click it for this menu.</span>
+    <button id="reset">Restore defaults</button>
+  </div>
+
+  <dialog id="picker">
+    <h3 id="pickerTitle">Choose a look</h3>
+    <div class="grid" id="grid"></div>
+    <div class="dialog-foot"><button id="closePicker">Close</button></div>
+  </dialog>
+
+  <datalist id="apps"></datalist>
+
+  <script src="sprites.js"></script>
+  <script src="houses.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

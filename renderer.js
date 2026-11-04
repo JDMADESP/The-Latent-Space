@@ -3,6 +3,7 @@
 'use strict';
 
 const { use, R, box, circle, star, text, textW, textOutlined, bubble, sideBubble, getSkin, trickPose, drawPet } = window.Sprites;
+const { getHouse, drawHouse } = window.Houses;
 const api = window.latent;
 
 const cv = document.getElementById('c');
@@ -14,26 +15,32 @@ const AW = 136;        // art width
 const CX = AW / 2;     // column / club centre
 const SP = 28;         // vertical spacing between floating pets
 const TOP = 16;        // headroom above the top pet
-const HOUSE_H = 50;    // club height incl. roof
 let AH = 0, G = 0, ROOF = 0, S = 3;
+let house = getHouse('nightclub');
 
-let config = { scale: 3, pets: [] };
+let config = { scale: 3, pets: [], house: 'nightclub' };
 let screenH = 900;
 let pets = [];
 
 function layout() {
   const n = Math.max(1, pets.length);
-  AH = TOP + n * SP + HOUSE_H;
+  house = getHouse(config.house);
+  AH = TOP + n * SP + house.height + 4;
   G = AH - 2;
-  ROOF = G - 44;
-  const maxS = Math.max(1, Math.floor((screenH - 20) / AH));
-  S = Math.max(1, Math.min(config.scale || 3, maxS));
-  cv.width = AW; cv.height = AH;
-  cv.style.width = AW * S + 'px';
-  cv.style.height = AH * S + 'px';
+  ROOF = G - house.height; // top of the building; pets launch from here
+  const fit = (screenH - 20) / AH;
+  S = Math.max(1, Math.min(config.scale || 3, fit));
+  api.reportFit(Math.floor(fit * 10) / 10);
+  const w = Math.round(AW * S), h = Math.round(AH * S);
+  if (cv.width !== AW || cv.height !== AH) { cv.width = AW; cv.height = AH; }
+  cv.style.width = w + 'px';
+  cv.style.height = h + 'px';
   ctx.imageSmoothingEnabled = false;
-  pets.forEach((p, i) => { p.slotX = CX; p.slotY = ROOF - 6 - (pets.length - 1 - i) * SP; });
-  api.resize(AW * S, AH * S);
+  pets.forEach((p, i) => {
+    p.slotX = CX; p.slotY = ROOF - 6 - (pets.length - 1 - i) * SP;
+    if (p.state === 'idle' && mode === 'out') { p.x = p.slotX; p.y = p.slotY; }
+  });
+  api.resize(w, h);
 }
 
 function buildPets() {
@@ -122,130 +129,29 @@ const SIGN = 'THE LATENT SPACE';
 let flickerIdx = -1, flickerUntil = 0;
 
 function drawBeams() {
-  const out = mode !== 'hidden';
-  // sweeping searchlights from the roof corners
-  for (const [lx, ph, col] of [[27, 0, '#ff3fd0'], [109, 2.1, '#4ff6ff']]) {
-    const tx = CX + Math.sin(T * 0.8 + ph) * 70;
-    ctx.globalAlpha = out ? 0.16 : 0.1;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(lx, ROOF - 3);
-    ctx.lineTo(tx - 9, 0);
-    ctx.lineTo(tx + 9, 0);
-    ctx.closePath();
-    ctx.fill();
-  }
-  // tractor-beam column the pets float in
-  if (out) {
-    const pulse = 0.07 + (beat() < 0.2 ? 0.04 : 0);
-    ctx.globalAlpha = pulse;
-    R(CX - 14, 0, 28, ROOF - 2, '#b46bff');
-    ctx.globalAlpha = pulse * 2;
-    R(CX - 14, 0, 1, ROOF - 2, '#e7c8ff'); R(CX + 13, 0, 1, ROOF - 2, '#e7c8ff');
-  }
+  // soft light column the pets float in
+  if (mode === 'hidden') return;
+  const pulse = 0.07 + (beat() < 0.2 ? 0.04 : 0);
+  ctx.globalAlpha = pulse;
+  R(CX - 14, 0, 28, ROOF - 2, '#b46bff');
+  ctx.globalAlpha = pulse * 2;
+  R(CX - 14, 0, 1, ROOF - 2, '#e7c8ff'); R(CX + 13, 0, 1, ROOF - 2, '#e7c8ff');
   ctx.globalAlpha = 1;
 }
 
 const beat = () => (T * 2) % 1; // 120 BPM
 
 function drawClub() {
-  const ol = '#07040d';
-  const hot = hovered === 'house';
-  const b = beat();
-  const thump = b < 0.15;
-  const homeCount = pets.filter(p => p.state === 'home' || (p.state === 'flyOut' && p.st < p.delay)).length;
-
-  // ground + neon puddle reflections
-  R(14, G, 108, 2, '#1c1729');
-  ctx.globalAlpha = 0.5;
-  R(36, G + 1, 8, 1, '#ff3fd0'); R(92, G + 1, 8, 1, '#4ff6ff'); R(62, G + 1, 12, 1, '#c0213c');
-  ctx.globalAlpha = 1;
-
-  // walls (dark brick)
-  R(25, ROOF + 3, 86, G - ROOF - 3, ol);
-  R(26, ROOF + 4, 84, G - ROOF - 4, '#1d1733');
-  for (let y = ROOF + 6, row = 0; y < G - 1; y += 3, row++) {
-    R(26, y, 84, 1, '#16112a');
-    for (let x = 26 + (row % 2) * 3; x < 110; x += 6) R(x, y - 2, 1, 2, '#16112a');
-  }
-
-  // parapet with chasing marquee lights
-  R(22, ROOF, 92, 4, ol);
-  R(23, ROOF + 1, 90, 2, '#2d2450');
-  for (let i = 0, x = 24; x < 112; x += 4, i++) {
-    const on = (i - Math.floor(T * 10)) % 4 === 0 || (i - Math.floor(T * 10)) % 4 === -0;
-    R(x, ROOF + 1, 2, 1, on ? NEON[i % NEON.length] : '#4a3c70');
-  }
-
-  // roof launch pad + spotlight cans
-  const out = mode !== 'hidden';
-  R(57, ROOF - 2, 22, 2, ol);
-  R(58, ROOF - 2, 20, 1, out ? (thump ? '#ffffff' : '#e7c8ff') : '#3a3060');
-  box(24, ROOF - 5, 6, 5, '#3a3a48', ol); R(25, ROOF - 5, 4, 1, '#ff3fd0');
-  box(106, ROOF - 5, 6, 5, '#3a3a48', ol); R(107, ROOF - 5, 4, 1, '#4ff6ff');
-
-  // neon sign
-  const sy = ROOF + 7;
-  ctx.globalAlpha = hot ? 0.35 : 0.2;
-  R(32, sy - 2, 72, 15, '#4ff6ff');
-  ctx.globalAlpha = 1;
-  R(33, sy - 1, 70, 13, '#4ff6ff');
-  R(34, sy, 68, 11, '#0d0820');
-  if (T > flickerUntil && Math.random() < 0.01) { flickerIdx = rndi(0, SIGN.length - 1); flickerUntil = T + rnd(0.1, 0.5); }
-  if (T > flickerUntil) flickerIdx = -1;
-  const tx = CX - Math.floor(textW(SIGN) / 2);
-  const pink = hot ? '#ffd0f6' : thump ? '#ff9cec' : '#ff5fdc';
-  ctx.globalAlpha = 0.35;
-  for (let i = 0; i < SIGN.length; i++) if (i !== flickerIdx) { text(SIGN[i], tx + i * 4 - 1, sy + 3, '#ff3fd0'); text(SIGN[i], tx + i * 4 + 1, sy + 3, '#ff3fd0'); }
-  ctx.globalAlpha = 1;
-  for (let i = 0; i < SIGN.length; i++) text(SIGN[i], tx + i * 4, sy + 3, i === flickerIdx ? '#4a2546' : pink);
-
-  // VIP marquee over the door
-  text('VIP', CX - 5, ROOF + 20, thump ? '#fff6b0' : '#ffd34d');
-
-  // porthole windows pulsing to the beat, with dancing silhouettes while pets are inside
-  [[40, 0], [96, 1]].forEach(([wx, k]) => {
-    const wy = ROOF + 29;
-    circle(wx, wy, 6, ol);
-    const c = NEON[(Math.floor(T * 2) + k * 2) % NEON.length];
-    circle(wx, wy, 5, c);
-    ctx.globalAlpha = 0.35; circle(wx, wy, 3, '#ffffff'); ctx.globalAlpha = 1;
-    const inside = pets.filter(p => p.state === 'home' || (p.state === 'flyOut' && p.st < p.delay)).filter((_, j) => j % 2 === k);
-    inside.slice(0, 2).forEach((p, j) => {
-      const hop = Math.floor(T * 4 + j) % 2;
-      const sx = wx - 3 + j * 4;
-      R(sx, wy - 1 + hop, 3, 6 - hop, p.skin.pal.dark);
-    });
-    R(wx - 6, wy - 1, 13, 1, ol); R(wx - 1, wy - 6, 1, 13, ol);
-  });
-
-  // door
-  const dx = 59, dw = 18, dy = G - 18;
-  R(dx - 1, dy - 1, dw + 2, 19, thump && homeCount ? '#c08bff' : '#8d5bff');
-  R(dx, dy, dw, 18, '#0b0716');
-  const doorOpen = pets.some(p => (p.state === 'flyOut' && p.st >= p.delay && p.st < p.delay + 0.3) || (p.state === 'flyIn' && p.st > 0.25));
-  if (homeCount || doorOpen) {
-    // party light spilling through the door gap
-    ctx.globalAlpha = 0.6 + (thump ? 0.3 : 0);
-    R(dx + 2, dy + 2, dw - 4, 14, NEON[Math.floor(T * 4) % NEON.length]);
-    ctx.globalAlpha = 1;
-    R(dx + 4, dy + 4, dw - 8, 12, '#0b0716');
-  } else {
-    R(dx + 8, dy, 2, 18, '#1a1130');
-  }
-  R(dx + 6, dy + 9, 1, 2, '#ffd34d'); R(dx + 11, dy + 9, 1, 2, '#ffd34d');
-
-  // velvet rope + red carpet
-  R(dx + 1, G, dw - 2, 2, '#c0213c');
-  for (const px of [49, 86]) { R(px, G - 7, 2, 7, '#ffd34d'); R(px - 1, G - 8, 4, 1, '#fff0a0'); }
-  for (const [x0, x1] of [[51, dx - 1], [dx + dw + 1, 86]]) {
-    for (let x = x0; x < x1; x++) {
-      const k = (x - x0) / (x1 - x0);
-      R(x, G - 6 + Math.round(Math.sin(k * Math.PI) * 2), 1, 1, '#d0213c');
-    }
-  }
-
-  if (hot && mode === 'hidden') bubble('CLICK!', CX, ROOF - 6 - (Math.floor(T * 3) % 2));
+  const inside = p => p.state === 'home' || (p.state === 'flyOut' && p.st < p.delay);
+  const st = {
+    t: T,
+    home: pets.filter(inside).map(p => p.skin),
+    out: mode !== 'hidden',
+    hot: hovered === 'house',
+    open: pets.some(p => (p.state === 'flyOut' && p.st >= p.delay && p.st < p.delay + 0.3) || (p.state === 'flyIn' && p.st > 0.25)),
+  };
+  drawHouse(house, CX, G, st);
+  if (st.hot && mode === 'hidden') bubble('CLICK!', CX, ROOF - 4 - (Math.floor(T * 3) % 2));
 }
 
 // ───────────────────────── fight cloud ─────────────────────────
@@ -291,6 +197,12 @@ function drawParts() {
       case 'dust': R(x, y, 2, 2, '#d9d2c5'); break;
       case 'note': R(x, y, 2, 2, p.c); R(x + 1, y - 4, 1, 4, p.c); R(x + 2, y - 4, 1, 1, p.c); R(x + 3, y - 3, 1, 1, p.c); break;
       case 'spark': if (Math.floor(p.t * 12) % 2) star(x, y, p.c); else R(x, y, 1, 1, p.c); break;
+      case 'smoke': { const r = 1 + Math.floor(p.t * 3); ctx.globalAlpha *= 0.6; R(x - (r >> 1), y - (r >> 1), r, r, '#d8d8e0'); break; }
+      case 'z': text('Z', x, y, '#dfe6ff'); break;
+      case 'snow': R(x, y, 1, 1, '#ffffff'); break;
+      case 'confetti': R(x, y, 1 + (Math.floor(p.t * 10) % 2), 1, p.c); break;
+      case 'leaf': R(x, y, 2, 1, p.c); R(x + (Math.floor(p.t * 4) % 2), y + 1, 1, 1, p.c); break;
+      case 'bit': text(p.s, x, y, '#4ff6ff'); break;
       case 'word': {
         const sc = p.t < 0.06 ? 1 : 2;
         textOutlined(p.s, x - Math.floor(textW(p.s, sc) / 2), y, p.c, '#1a1020', sc);
@@ -310,7 +222,7 @@ function toggleHouse() {
     pets.forEach((p, i) => {
       setState(p, 'flyOut');
       p.delay = (pets.length - 1 - i) * 0.14;
-      p.x = CX; p.y = ROOF; p.facing = 1;
+      p.x = CX; p.y = ROOF + 2; p.facing = 1;
     });
   } else if (mode === 'out') {
     mode = 'closing';
@@ -432,7 +344,7 @@ function update(dt) {
       const k = Math.min(1, (p.st - p.delay) / 0.6);
       if (p.st - p.delay < dt * 1.5) sparkle(CX, ROOF, 4);
       p.x = CX + Math.sin(k * Math.PI * 2) * 6 * (1 - k);
-      p.y = lerp(ROOF, p.slotY, easeOut(k));
+      p.y = lerp(ROOF + 2, p.slotY, easeOut(k));
       if (Math.random() < 0.3) sparkle(p.x, p.y + 4);
       if (k >= 1) { p.x = p.slotX; p.y = p.slotY; setState(p, 'idle'); }
     }
@@ -448,14 +360,28 @@ function update(dt) {
   if (mode === 'closing' && pets.every(p => p.state === 'home')) mode = 'hidden';
   if (mode === 'fight') updateFight(dt);
 
-  // music notes leaking out of the club while the party is inside
-  if (mode === 'hidden' && Math.random() < dt * 1.4) {
-    addP({ type: 'note', x: rnd(30, 106), y: ROOF - 2, vx: rnd(-5, 5), vy: -12, life: 1.6, c: NEON[rndi(0, NEON.length - 1)] });
+  // ambient particles from the house (smoke, music, snow…)
+  for (const e of house.emit || []) {
+    if (e.when === 'home' && mode !== 'hidden') continue;
+    if (Math.random() >= dt * e.rate) continue;
+    const ex = CX + (Array.isArray(e.x) ? rnd(e.x[0], e.x[1]) : e.x);
+    const ey = G + e.y;
+    const c = e.color || NEON[rndi(0, NEON.length - 1)];
+    switch (e.type) {
+      case 'note': addP({ type: 'note', x: ex, y: ey, vx: rnd(-5, 5), vy: -12, life: 1.6, c }); break;
+      case 'smoke': addP({ type: 'smoke', x: ex + rnd(-1, 1), y: ey, vx: rnd(2, 6), vy: -8, life: 1.6 }); break;
+      case 'z': addP({ type: 'z', x: ex, y: ey, vx: rnd(2, 6), vy: -9, life: 1.6 }); break;
+      case 'snow': addP({ type: 'snow', x: ex, y: Math.max(0, ey), vx: rnd(-3, 3), vy: rnd(8, 14), life: 6 }); break;
+      case 'confetti': addP({ type: 'confetti', x: ex, y: ey, vx: rnd(-10, 10), vy: rnd(-20, -8), ay: 30, life: 1.4, c }); break;
+      case 'leaf': addP({ type: 'leaf', x: ex, y: ey, vx: rnd(-6, 6), vy: rnd(4, 9), life: 3, c: e.color || ['#3f9a45', '#62b34f', '#e2b85a'][rndi(0, 2)] }); break;
+      case 'spark': addP({ type: 'spark', x: ex, y: ey, vx: rnd(-4, 4), vy: rnd(-10, -4), life: rnd(0.5, 1), c }); break;
+      case 'bit': addP({ type: 'bit', s: Math.random() < 0.5 ? '0' : '1', x: ex, y: ey, vx: 0, vy: -8, life: 1.4 }); break;
+    }
   }
 
   for (let i = parts.length - 1; i >= 0; i--) {
     const q = parts[i];
-    q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt;
+    q.t += dt; if (q.ay) q.vy += q.ay * dt; q.x += q.vx * dt; q.y += q.vy * dt;
     if (q.t >= q.life) parts.splice(i, 1);
   }
 }
@@ -511,7 +437,7 @@ function hitTest() {
       if (mx >= p.x - 9 && mx <= p.x + 9 && my >= p.y - 26 && my <= p.y + 2) return p;
     }
   }
-  if (mx >= 21 && mx <= 115 && my >= ROOF - 5 && my <= AH) return 'house';
+  if (mx >= CX - house.hw - 2 && mx <= CX + house.hw + 2 && my >= ROOF - 6 && my <= AH) return 'house';
   return null;
 }
 
@@ -574,7 +500,13 @@ window.addEventListener('blur', () => {
 });
 
 api.onToggle(() => toggleHouse());
-api.onConfig(data => { config = data.config; screenH = data.screenH || screenH; buildPets(); });
+api.onConfig(data => {
+  const petsChanged = JSON.stringify(data.config.pets) !== JSON.stringify(config.pets);
+  config = data.config;
+  screenH = data.screenH || screenH;
+  if (petsChanged) buildPets();
+  else layout(); // size or house changed: keep the party going
+});
 
 // ───────────────────────── boot ─────────────────────────
 api.getConfig().then(data => {

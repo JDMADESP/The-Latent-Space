@@ -239,7 +239,11 @@
         R(2, hy - 9, 4, 10, P.ol); R(3, hy - 8, 2, 9, P.main); R(4, hy - 7, 1, 6, P.acc);
         break;
       case 'dome':
-        blob([[-11, hy - 3, 22, 16], [-10, hy - 5, 20, 19]], 'rgba(170,220,255,0.35)', '#8fd3ff');
+        ctx.globalAlpha = 0.3;
+        blob([[-11, hy - 3, 22, 16], [-10, hy - 5, 20, 19]], '#bfe8ff', '#bfe8ff');
+        ctx.globalAlpha = 1;
+        R(-8, hy - 5, 16, 1, '#8fd3ff'); R(-10, hy - 4, 2, 1, '#8fd3ff'); R(8, hy - 4, 2, 1, '#8fd3ff');
+        R(-11, hy - 3, 1, 14, '#8fd3ff'); R(10, hy - 3, 1, 14, '#8fd3ff');
         break;
     }
   }
@@ -399,7 +403,23 @@
     }
   }
 
+  // Bresenham pixel line
+  function line(x0, y0, x1, y1, c) {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      R(x0, y0, 1, 1, c);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  }
+  function alpha(a, fn) { const p = ctx.globalAlpha; ctx.globalAlpha = p * a; fn(); ctx.globalAlpha = p; }
+
   window.Sprites = {
+    getCtx: () => ctx, line, alpha,
     use, R, box, blob, circle, star, text, textW, textOutlined, bubble, sideBubble,
     FONT_CHARS, SKINS, getSkin, trickPose, drawPet,
   };
