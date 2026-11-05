@@ -7,9 +7,7 @@ Click a pet to open its app (ChatGPT, Claude, Grok, or anything else you like)â€
 and the rest of the crew immediately jumps it in a cartoon dust-cloud brawl.
 
 <p align="center">
-  <img src="docs/club.png" width="300" alt="Pets floating above the nightclub">
-  &nbsp;&nbsp;
-  <img src="docs/fight.png" width="300" alt="The other pets beating up the one that was clicked">
+  <img src="docs/demo.gif" width="480" alt="Demo: clicking the house brings the pets out, hovering makes them do tricks, and clicking one opens its app while the others beat it up">
 </p>
 
 - **25 houses** to live in: a neon nightclub, cottage, stadium, castle, UFO, pirate ship, rocket pad, and more, all animated.
