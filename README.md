@@ -26,16 +26,53 @@ Each pet launches one of your AI apps — and when you click one, the app opens
 
 ## Install
 
-Requires **macOS** and **[Node.js](https://nodejs.org) 18+**.
+Requires **macOS**. Once installed, The Latent Space runs in the background and **starts by itself every time you log in** — no terminal needed.
+
+### Option A — Download the app
+
+1. Grab the latest **`.dmg`** from the [Releases page](https://github.com/JDMADESP/The-Latent-Space/releases/latest).
+2. Open it and drag **The Latent Space** into **Applications**.
+3. The app isn't notarized by Apple (that costs $99/yr), so macOS will block the first launch. Run this once in Terminal, then open the app normally:
+   ```bash
+   xattr -cr "/Applications/The Latent Space.app"
+   ```
+
+### Option B — Build it yourself (one command)
+
+Requires [Node.js](https://nodejs.org) 18+.
 
 ```bash
-git clone https://github.com/JDMADESP/the-latent-space.git
-cd the-latent-space
+git clone https://github.com/JDMADESP/The-Latent-Space.git
+cd The-Latent-Space
 npm install
-npm start
+npm run install-app
 ```
 
-The house appears in the bottom-right corner of your screen, and a 🪩 icon appears in the menu bar.
+This builds the app for your Mac, installs it to `/Applications`, launches it, and turns on start-at-login.
+Run `npm run install-app` again any time you pull updates.
+
+### Start at login
+
+It's on by default. Toggle it from the 🪩 menu-bar icon → **Start at Login**, or in
+**System Settings → General → Login Items**. To stop it for now, choose **Quit** from the same menu.
+
+### Uninstall
+
+Quit it from the 🪩 menu, then delete `/Applications/The Latent Space.app`
+(and optionally `~/Library/Application Support/The Latent Space` for your settings).
+
+### Developing
+
+`npm start` runs it straight from the source without installing — handy while editing.
+
+### Publishing a release (maintainers)
+
+Push a version tag and GitHub Actions builds a universal (Apple Silicon + Intel) `.dmg` and attaches it to a Release:
+
+```bash
+npm version patch          # bumps package.json, commits, and tags (e.g. v1.0.1)
+git push --follow-tags
+```
 
 ## Using it
 
@@ -93,7 +130,7 @@ Add an entry and it shows up in the picker automatically.
 ## Project layout
 
 ```
-main.js        Electron main process: transparent window, config, app launching, menus
+main.js        Electron main process: transparent window, config, app launching, menus, start-at-login
 preload.js     Safe bridge between the windows and the main process
 renderer.js    The floating column, tricks, particles, and the fight
 sprites.js     Pixel helpers, pixel font, and all 25 pet skins (shared by both windows)

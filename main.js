@@ -23,6 +23,7 @@ let settingsWin = null;
 let tray = null;
 let dragTimer = null;
 let config = null;
+let quitting = false;
 
 // ───────────── installed apps ─────────────
 function listApps() {
@@ -130,7 +131,10 @@ function createWindow() {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setIgnoreMouseEvents(true, { forward: true });
   win.loadFile('index.html');
-  win.on('closed', () => { win = null; });
+  win.on('closed', () => { win = null; if (!quitting) setTimeout(createWindow, 500); });
+  // keep the pets alive: if the page crashes or freezes, reload it
+  win.webContents.on('render-process-gone', () => setTimeout(() => win && win.reload(), 1000));
+  win.on('unresponsive', () => setTimeout(() => win && win.reload(), 3000));
 }
 
 function openSettings() {
@@ -148,11 +152,31 @@ function openSettings() {
   settingsWin.on('closed', () => { settingsWin = null; if (app.dock) app.dock.hide(); });
 }
 
+// ───────────── start at login ─────────────
+// Only the installed .app can register itself (in `npm start` dev mode it would register bare Electron).
+const startsAtLogin = () => app.isPackaged && app.getLoginItemSettings().openAtLogin;
+function setStartAtLogin(on) {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: !!on });
+  if (tray) tray.setContextMenu(buildMenu());
+}
+function enableLoginOnFirstRun() {
+  if (!app.isPackaged) return;
+  const flag = userFile('login-item-initialized');
+  if (fs.existsSync(flag)) return; // respect the user's choice after the first run
+  setStartAtLogin(true);
+  try { fs.writeFileSync(flag, '1'); } catch {}
+}
+
 function buildMenu() {
   return Menu.buildFromTemplate([
     { label: 'Show / Hide Pets', click: () => win && win.webContents.send('toggle') },
     { label: 'Customize…', click: openSettings },
     { label: 'Reset Position', click: () => { const b = win.getBounds(); placeAt(defaultAnchor(), b.width, b.height); saveAnchor(); } },
+    { type: 'separator' },
+    app.isPackaged
+      ? { label: 'Start at Login', type: 'checkbox', checked: startsAtLogin(), click: item => setStartAtLogin(item.checked) }
+      : { label: 'Start at Login (install the app first)', enabled: false },
     { type: 'separator' },
     { label: 'Quit The Latent Space', click: () => app.quit() },
   ]);
@@ -219,14 +243,17 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', openSettings);
+  app.on('before-quit', () => { quitting = true; });
   app.whenReady().then(() => {
     if (app.dock) app.dock.hide();
     config = loadConfig();
+    enableLoginOnFirstRun();
     createWindow();
     tray = new Tray(nativeImage.createEmpty());
     tray.setTitle('🪩');
     tray.setToolTip('The Latent Space');
     tray.setContextMenu(buildMenu());
   });
-  app.on('window-all-closed', () => app.quit());
+  app.on('window-all-closed', () => { /* stay alive in the menu bar */ });
+  app.on('activate', () => { if (!win) createWindow(); });
 }

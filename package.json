@@ -4,10 +4,13 @@
   "description": "A pixel-art nightclub of AI desktop pets for macOS. Click a pet to open its app — then watch the others beat it up.",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "install-app": "node scripts/install-mac.js",
+    "dist": "electron-builder --mac --universal"
   },
   "devDependencies": {
-    "electron": "^45.2.3"
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
   },
   "license": "MIT",
   "keywords": [
@@ -17,5 +20,53 @@
     "macos",
     "ai"
   ],
-  "private": true
+  "private": true,
+  "author": "JDMADESP",
+  "homepage": "https://github.com/JDMADESP/The-Latent-Space",
+  "build": {
+    "appId": "com.jdmadesp.thelatentspace",
+    "productName": "The Latent Space",
+    "copyright": "Copyright (c) 2026 JDMADESP",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "sprites.js",
+      "houses.js",
+      "settings.js",
+      "index.html",
+      "settings.html",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "target": [
+        {
+          "target": "dmg"
+        },
+        {
+          "target": "zip"
+        }
+      ],
+      "extendInfo": {
+        "LSUIElement": true
+      },
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "The Latent Space"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "JDMADESP",
+      "repo": "The-Latent-Space",
+      "releaseType": "release"
+    }
+  }
 }
