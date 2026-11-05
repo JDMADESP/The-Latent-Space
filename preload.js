@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('latent', {
   openSettings: () => ipcRenderer.send('open-settings'),
   // pet window
   setIgnore: ignore => ipcRenderer.send('set-ignore', ignore),
-  resize: (w, h) => ipcRenderer.send('resize', w, h),
+  layout: info => ipcRenderer.send('layout', info),
+  onFlip: fn => ipcRenderer.on('flip', (_e, f) => fn(f)),
   reportFit: f => ipcRenderer.send('report-fit', f),
   onFit: fn => ipcRenderer.on('fit', (_e, f) => fn(f)),
   launch: index => ipcRenderer.send('launch', index),

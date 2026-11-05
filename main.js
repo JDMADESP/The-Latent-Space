@@ -84,39 +84,53 @@ function broadcastConfig() {
   for (const w of [win, settingsWin]) if (w && !w.isDestroyed()) w.webContents.send('config', configPayload());
 }
 
-// ───────────── window position (anchored at bottom-centre so resizes grow upward) ─────────────
+// ───────────── position ─────────────
+// We track where the HOUSE is (centre of its ground line), not the window. The window is laid out
+// around it: pets float above the house, or below it when there isn't room above (near the top).
+let anchor = null;   // { cx, ground } in screen coordinates
+let layoutInfo = null; // from the pet window: { w, hN, gN, hF, gF } (sizes for normal / flipped layout)
+let flipped = false;
+
+function onSomeDisplay(a) {
+  return screen.getAllDisplays().some(d => {
+    const b = d.bounds;
+    return a.cx >= b.x - 50 && a.cx <= b.x + b.width + 50 && a.ground >= b.y - 50 && a.ground <= b.y + b.height + 50;
+  });
+}
 function loadAnchor() {
   try {
     const a = JSON.parse(fs.readFileSync(userFile('position.json'), 'utf8'));
-    if (screen.getAllDisplays().some(d => {
-      const b = d.bounds;
-      return a.cx >= b.x && a.cx <= b.x + b.width && a.bottom >= b.y && a.bottom <= b.y + b.height + 50;
-    })) return a;
+    if (a.ground == null && a.bottom != null) a.ground = a.bottom - 6; // older saves stored the window bottom
+    if (Number.isFinite(a.cx) && Number.isFinite(a.ground) && onSomeDisplay(a)) return { cx: a.cx, ground: a.ground };
   } catch {}
   return defaultAnchor();
 }
 function defaultAnchor() {
   const wa = screen.getPrimaryDisplay().workArea;
-  return { cx: wa.x + wa.width - 240, bottom: wa.y + wa.height };
-}
-function currentAnchor() {
-  const b = win.getBounds();
-  return { cx: b.x + b.width / 2, bottom: b.y + b.height };
+  return { cx: wa.x + wa.width - 240, ground: wa.y + wa.height - 6 };
 }
 function saveAnchor() {
-  if (!win) return;
-  try { fs.writeFileSync(userFile('position.json'), JSON.stringify(currentAnchor())); } catch {}
+  try { fs.writeFileSync(userFile('position.json'), JSON.stringify(anchor)); } catch {}
 }
-function placeAt(anchor, w, h) {
-  win.setBounds({ x: Math.round(anchor.cx - w / 2), y: Math.round(anchor.bottom - h), width: Math.round(w), height: Math.round(h) });
+function place() {
+  if (!win || !layoutInfo || !anchor) return;
+  const L = layoutInfo;
+  const d = screen.getDisplayNearestPoint({ x: Math.round(anchor.cx), y: Math.round(anchor.ground) });
+  const room = anchor.ground - d.workArea.y; // space above the house's ground line
+  const was = flipped;
+  if (!flipped && room < L.gN) flipped = true;            // not enough sky: pets go below
+  else if (flipped && room > L.gN + 30) flipped = false;  // (30px of hysteresis so it doesn't flicker)
+  const h = flipped ? L.hF : L.hN, g = flipped ? L.gF : L.gN;
+  win.setBounds({ x: Math.round(anchor.cx - L.w / 2), y: Math.round(anchor.ground - g), width: L.w, height: h });
+  if (was !== flipped) win.webContents.send('flip', flipped);
 }
 
 // ───────────── windows ─────────────
 function createWindow() {
-  const a = loadAnchor();
+  anchor = loadAnchor();
   win = new BrowserWindow({
     width: 408, height: 600,
-    x: Math.round(a.cx - 204), y: Math.round(a.bottom - 600),
+    x: Math.round(anchor.cx - 204), y: Math.round(anchor.ground - 594),
     transparent: true,
     frame: false,
     resizable: false,
@@ -172,7 +186,7 @@ function buildMenu() {
   return Menu.buildFromTemplate([
     { label: 'Show / Hide Pets', click: () => win && win.webContents.send('toggle') },
     { label: 'Customize…', click: openSettings },
-    { label: 'Reset Position', click: () => { const b = win.getBounds(); placeAt(defaultAnchor(), b.width, b.height); saveAnchor(); } },
+    { label: 'Reset Position', click: () => { anchor = defaultAnchor(); place(); saveAnchor(); } },
     { type: 'separator' },
     app.isPackaged
       ? { label: 'Start at Login', type: 'checkbox', checked: startsAtLogin(), click: item => setStartAtLogin(item.checked) }
@@ -207,13 +221,13 @@ ipcMain.on('set-ignore', (e, ignore) => {
   if (win && e.sender === win.webContents) win.setIgnoreMouseEvents(!!ignore, { forward: true });
 });
 
-ipcMain.on('resize', (e, w, h) => {
-  if (!win || e.sender !== win.webContents) return;
-  w = Math.max(50, Math.min(4000, Number(w) || 0));
-  h = Math.max(50, Math.min(4000, Number(h) || 0));
-  const b = win.getBounds();
-  if (b.width === w && b.height === h) return;
-  placeAt(currentAnchor(), w, h);
+ipcMain.on('layout', (e, info) => {
+  if (!win || e.sender !== win.webContents || !info) return;
+  const n = (v, lo, hi) => Math.round(Math.max(lo, Math.min(hi, Number(v) || 0)));
+  layoutInfo = { w: n(info.w, 50, 4000), hN: n(info.hN, 50, 4000), gN: n(info.gN, 0, 4000), hF: n(info.hF, 50, 4000), gF: n(info.gF, 0, 4000) };
+  place();
+  // the renderer may have restarted (reload) — make sure it knows the current orientation
+  if (!!info.flip !== flipped) win.webContents.send('flip', flipped);
 });
 
 ipcMain.on('launch', (_e, i) => {
@@ -224,14 +238,14 @@ ipcMain.on('launch', (_e, i) => {
 });
 
 ipcMain.on('drag-start', () => {
-  if (!win) return;
+  if (!win || !anchor) return;
   const c = screen.getCursorScreenPoint();
-  const [wx, wy] = win.getPosition();
-  const off = { x: c.x - wx, y: c.y - wy };
+  const off = { x: c.x - anchor.cx, y: c.y - anchor.ground }; // grab point relative to the house
   clearInterval(dragTimer);
   dragTimer = setInterval(() => {
     const p = screen.getCursorScreenPoint();
-    win.setPosition(p.x - off.x, p.y - off.y);
+    anchor = { cx: p.x - off.x, ground: p.y - off.y };
+    place();
   }, 8);
 });
 ipcMain.on('drag-end', () => { clearInterval(dragTimer); dragTimer = null; saveAnchor(); });

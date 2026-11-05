@@ -16,19 +16,28 @@ const CX = AW / 2;     // column / club centre
 const SP = 28;         // vertical spacing between floating pets
 const TOP = 16;        // headroom above the top pet
 let AH = 0, G = 0, ROOF = 0, S = 3;
+let flip = false;      // true = pets hang below the house (house is near the top of the screen)
+const HEAD = 14;       // room above the house for chimneys/antennas when flipped
 let house = getHouse('nightclub');
 
 let config = { scale: 3, pets: [], house: 'nightclub' };
 let screenH = 900;
 let pets = [];
 
-function layout() {
+// Window geometry for both orientations (art pixels).
+function geometry(flipped) {
   const n = Math.max(1, pets.length);
+  if (!flipped) { const AH = TOP + n * SP + house.height + 4; return { AH, G: AH - 2 }; }
+  const G = HEAD + house.height;
+  return { AH: G + 8 + n * SP, G };
+}
+
+function layout() {
   house = getHouse(config.house);
-  AH = TOP + n * SP + house.height + 4;
-  G = AH - 2;
-  ROOF = G - house.height; // top of the building; pets launch from here
-  const fit = (screenH - 20) / AH;
+  const gN = geometry(false), gF = geometry(true);
+  ({ AH, G } = flip ? gF : gN);
+  ROOF = G - house.height; // top of the building
+  const fit = (screenH - 20) / Math.max(gN.AH, gF.AH);
   S = Math.max(1, Math.min(config.scale || 3, fit));
   api.reportFit(Math.floor(fit * 10) / 10);
   const w = Math.round(AW * S), h = Math.round(AH * S);
@@ -36,12 +45,23 @@ function layout() {
   cv.style.width = w + 'px';
   cv.style.height = h + 'px';
   ctx.imageSmoothingEnabled = false;
+  const n = pets.length;
   pets.forEach((p, i) => {
-    p.slotX = CX; p.slotY = ROOF - 6 - (pets.length - 1 - i) * SP;
+    p.slotX = CX;
+    // above: first pet on top of the stack. below: first pet right under the house.
+    p.slotY = flip ? G + 32 + i * SP : ROOF - 6 - (n - 1 - i) * SP;
     if (p.state === 'idle' && mode === 'out') { p.x = p.slotX; p.y = p.slotY; }
   });
-  api.resize(w, h);
+  api.layout({
+    w, flip,
+    hN: Math.round(gN.AH * S), gN: gN.G * S,
+    hF: Math.round(gF.AH * S), gF: gF.G * S,
+  });
 }
+
+// where pets leave/enter the house: the roof when floating above, the door when hanging below
+const exitY = () => (flip ? G : ROOF + 2);
+const enterY = () => (flip ? G : ROOF + 4);
 
 function buildPets() {
   const wasOut = mode !== 'hidden' && mode !== 'closing';
@@ -133,9 +153,10 @@ function drawBeams() {
   if (mode === 'hidden') return;
   const pulse = 0.07 + (beat() < 0.2 ? 0.04 : 0);
   ctx.globalAlpha = pulse;
-  R(CX - 14, 0, 28, ROOF - 2, '#b46bff');
+  const y0 = flip ? G + 2 : 0, y1 = flip ? AH : ROOF - 2;
+  R(CX - 14, y0, 28, y1 - y0, '#b46bff');
   ctx.globalAlpha = pulse * 2;
-  R(CX - 14, 0, 1, ROOF - 2, '#e7c8ff'); R(CX + 13, 0, 1, ROOF - 2, '#e7c8ff');
+  R(CX - 14, y0, 1, y1 - y0, '#e7c8ff'); R(CX + 13, y0, 1, y1 - y0, '#e7c8ff');
   ctx.globalAlpha = 1;
 }
 
@@ -151,7 +172,7 @@ function drawClub() {
     open: pets.some(p => (p.state === 'flyOut' && p.st >= p.delay && p.st < p.delay + 0.3) || (p.state === 'flyIn' && p.st > 0.25)),
   };
   drawHouse(house, CX, G, st);
-  if (st.hot && mode === 'hidden') bubble('CLICK!', CX, ROOF - 4 - (Math.floor(T * 3) % 2));
+  if (st.hot && mode === 'hidden') bubble('CLICK!', CX, (flip ? G + 15 : ROOF - 4) - (Math.floor(T * 3) % 2));
 }
 
 // ───────────────────────── fight cloud ─────────────────────────
@@ -218,11 +239,11 @@ function toggleHouse() {
   if (!pets.length) return;
   if (mode === 'hidden') {
     mode = 'opening';
-    // bottom slot launches first so the column stacks upward
+    // the slot closest to the house launches first so the column stacks outward
     pets.forEach((p, i) => {
       setState(p, 'flyOut');
-      p.delay = (pets.length - 1 - i) * 0.14;
-      p.x = CX; p.y = ROOF + 2; p.facing = 1;
+      p.delay = (flip ? i : pets.length - 1 - i) * 0.14;
+      p.x = CX; p.y = exitY(); p.facing = 1;
     });
   } else if (mode === 'out') {
     mode = 'closing';
@@ -342,17 +363,17 @@ function update(dt) {
 
     if (p.state === 'flyOut' && p.st >= p.delay) {
       const k = Math.min(1, (p.st - p.delay) / 0.6);
-      if (p.st - p.delay < dt * 1.5) sparkle(CX, ROOF, 4);
+      if (p.st - p.delay < dt * 1.5) sparkle(CX, exitY(), 4);
       p.x = CX + Math.sin(k * Math.PI * 2) * 6 * (1 - k);
-      p.y = lerp(ROOF + 2, p.slotY, easeOut(k));
+      p.y = lerp(exitY(), p.slotY, easeOut(k));
       if (Math.random() < 0.3) sparkle(p.x, p.y + 4);
       if (k >= 1) { p.x = p.slotX; p.y = p.slotY; setState(p, 'idle'); }
     }
     if (p.state === 'flyIn' && p.st >= p.delay) {
       const k = Math.min(1, (p.st - p.delay) / 0.45);
       p.x = lerp(p.fx, CX, k);
-      p.y = lerp(p.fy, ROOF + 4, easeIn(k));
-      if (k >= 1) { setState(p, 'home'); sparkle(CX, ROOF, 3); }
+      p.y = lerp(p.fy, enterY(), easeIn(k));
+      if (k >= 1) { setState(p, 'home'); sparkle(CX, enterY(), 3); }
     }
   }
 
@@ -437,7 +458,7 @@ function hitTest() {
       if (mx >= p.x - 9 && mx <= p.x + 9 && my >= p.y - 26 && my <= p.y + 2) return p;
     }
   }
-  if (mx >= CX - house.hw - 2 && mx <= CX + house.hw + 2 && my >= ROOF - 6 && my <= AH) return 'house';
+  if (mx >= CX - house.hw - 2 && mx <= CX + house.hw + 2 && my >= ROOF - 6 && my <= G + 2) return 'house';
   return null;
 }
 
@@ -500,6 +521,7 @@ window.addEventListener('blur', () => {
 });
 
 api.onToggle(() => toggleHouse());
+api.onFlip(f => { if (f !== flip) { flip = f; layout(); } });
 api.onConfig(data => {
   const petsChanged = JSON.stringify(data.config.pets) !== JSON.stringify(config.pets);
   config = data.config;
