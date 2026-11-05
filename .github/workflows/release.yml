@@ -1,5 +1,5 @@
 # Builds the macOS app and attaches it to a GitHub Release.
-# Trigger: push a tag like v1.0.0  (git tag v1.0.0 && git push origin v1.0.0)
+# Trigger: push a tag like v1.0.1   (npm version patch && git push --follow-tags)
 name: Release
 
 on:
@@ -20,7 +20,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx electron-builder --mac --universal --publish always
+      # Build only; uploading happens in one step below (electron-builder's own parallel
+      # uploads could create duplicate releases for the same tag).
+      - run: npx electron-builder --mac --universal --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: The Latent Space ${{ github.ref_name }}
+          files: dist/The-Latent-Space.dmg
+          body: |
+            Pixel-art AI pets that live on your Mac desktop 🪩
+
+            ### Install
+            1. Download **The-Latent-Space.dmg** below and drag the app into **Applications**.
+            2. The app isn't registered with Apple, so macOS blocks the first launch. Open **Terminal** and run:
+               ```
+               xattr -cr "/Applications/The Latent Space.app"
+               ```
+            3. Open **The Latent Space**. A little house appears in the bottom-right corner, and it starts automatically when you log in.
+
+            Requires macOS 12 or later (Apple Silicon and Intel).
